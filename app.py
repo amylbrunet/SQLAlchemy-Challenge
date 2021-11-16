@@ -109,10 +109,12 @@ def tobs():
 
 @app.route('/api/v1.0/<start>')
 def start(start):
+    measurement = base.classes.measurement
     session = Session(engine)
 
     results = session.query(func.min(measurement.tobs), func.max(measurement.tobs), func.avg(measurement.tobs)).\
             filter(measurement.date >= start).group_by(measurement.date).all()
+
 
     start_tobs_list = []
     for min, max, avg in results:
@@ -123,13 +125,13 @@ def start(start):
         start_tobs_list.append(start_tobs_dict)
 
     session.close()
-
+    
     return jsonify(start_tobs_list)
 
 # start/end date route
 
-@app.route('/api/v1.0/<start><end>')
-def start_end(start,end):
+@app.route('/api/v1.0/<start>/<end>')
+def start_end(start, end):
     measurement = base.classes.measurement
     session = Session(engine)
 
