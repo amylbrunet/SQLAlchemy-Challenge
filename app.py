@@ -25,15 +25,6 @@ base.prepare(engine, reflect=True)
 measurement = base.classes.measurement
 station = base.classes.station
 
-# define variables for start and end date
-session = Session(engine)
-
-most_recent_date = Session.query(measurement.date).order_by(measurement.date.desc()).first()
-one_year_from_start = dt.date(2017,8,23) - dt.timedelta(days=365)
-
-session.close()
-
-
 # flask set up
 app = Flask(__name__)
 
@@ -49,8 +40,8 @@ def welcome():
         f"Precipitation: /api/v1.0/precipitation<br/>"
         f"Stations: /api/v1.0/stations<br/>"
         f"Tobs: /api/v1.0/tobs<br/>"
-        f"Temperature Stat from Start Date (yyyy-mm-dd): /api/v1.0/yyyy-mm-dd<br/>"
-        f"Temperature Stat from Start to End Date (yyyy-mm-dd): /api/v1.0/yyyy-mm-dd/yyyy-mm-dd"
+        f"Temperature Stats from Start Date (yyyy-mm-dd): /api/v1.0/yyyy-mm-dd<br/>"
+        f"Temperature Stats from Start to End Date (yyyy-mm-dd): /api/v1.0/yyyy-mm-dd/yyyy-mm-dd"
     )
 
 # precipitation route
@@ -75,6 +66,7 @@ def precipitation():
 
 @app.route("/api/v1.0/stations")
 def stations():
+    station = base.classes.station
     session = Session(engine)
     select = [station.station, station.name, station.latitude, station.longitude, station.elevation]
     result = session.query(*select).all()
@@ -96,22 +88,65 @@ def stations():
 
 @app.route('/api/v1.0/tobs')
 def tobs():
+    measurement = base.classes.measurement
     session = Session(engine)
 
-    results = session.query(measurement.tobs, measurement.date).filter(measurement.date >= one_year_from_start)
+    one_year_from_start = dt.date(2017,8,23) - dt.timedelta(days=365)
+    result = session.query(measurement.tobs, measurement.date).filter(measurement.date >= one_year_from_start).all()
 
     session.close()
 
-    tobs = []
-    for tobs, date in results:
+    tobs_list = []
+    for tobs, date in result:
         tobs_dict = {}
-        tobs_dict["Tobs"] = tobs
         tobs_dict["Date"] = date
-        tobs.append(tobs_dict)
+        tobs_dict["Tobs"] = tobs
+        tobs_list.append(tobs_dict)
 
-    return jsonify(tobs)
+    return jsonify(tobs_list)
 
+# start date route
 
+@app.route('/api/v1.0/<start>')
+def start(start):
+    session = Session(engine)
+
+    results = session.query(func.min(measurement.tobs), func.max(measurement.tobs), func.avg(measurement.tobs)).\
+            filter(measurement.date >= start).group_by(measurement.date).all()
+
+    start_tobs_list = []
+    for min, max, avg in results:
+        start_tobs_dict = {}
+        start_tobs_dict["Minimum Temperature"] = min
+        start_tobs_dict["Maximum Temperature"] = max
+        start_tobs_dict["Average Temperature"] = avg
+        start_tobs_list.append(start_tobs_dict)
+
+    session.close()
+
+    return jsonify(start_tobs_list)
+
+# start/end date route
+
+@app.route('/api/v1.0/<start><end>')
+def start_end(start,end):
+    measurement = base.classes.measurement
+    session = Session(engine)
+
+    results = session.query(func.min(measurement.tobs), func.max(measurement.tobs), func.avg(measurement.tobs)).\
+            filter(measurement.date >= start).filter(measurement.date <= end).group_by(measurement.date).all()
+
+    start_end_list = []
+    for min, max, avg in results:
+        start_end_dict = {}
+        start_end_dict["Minimum Temperature"] = min
+        start_end_dict["Maximum Temperature"] = max
+        start_end_dict["Average Temperature"] = avg
+        start_end_list.append(start_end_dict)
+
+    session.close()
+
+    return jsonify(start_end_list)
 
 
 if __name__ == '__main__':
